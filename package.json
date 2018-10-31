@@ -1,0 +1,36 @@
+{
+  "name": "node-audio-linux",
+  "version": "1.0.0",
+  "description": "Native Node.js audio controls for linux",
+  "main": "index.js",
+  "os": [
+    "linux"
+  ],
+  "gypfile": true,
+  "scripts": {
+    "install": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jlonardi/node-audio-linux.git"
+  },
+  "keywords": [
+    "node",
+    "linux",
+    "volume",
+    "audio"
+  ],
+  "author": "Jarno Lonardi",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jlonardi/node-audio-linux/issues"
+  },
+  "homepage": "https://github.com/jlonardi/node-audio-linux#readme",
+  "dependencies": {
+    "nan": "^2.11.1",
+    "node-gyp": "^3.8.0"
+  },
+  "devDependencies": {
+    "chalk": "^2.4.1"
+  }
+}
