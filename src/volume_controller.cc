@@ -10,12 +10,10 @@ typedef enum {
     AUDIO_UNMUTE,
 } audio_volume_action;
 
-int audio(audio_volume_action action, long* outvol)
-{
+snd_mixer_t *handle;
 
-  long min, max;
-  long volume = 0;
-  snd_mixer_t *handle;
+snd_mixer_elem_t* getMixerElem() {
+
   snd_mixer_selem_id_t *sid;
   const char *card = "default";
   const char *selem_name = "Master";
@@ -30,41 +28,66 @@ int audio(audio_volume_action action, long* outvol)
   snd_mixer_selem_id_set_name(sid, selem_name);
 
   snd_mixer_elem_t* elem = snd_mixer_find_selem(handle, sid);
+  return elem;
+}
+
+float getVolume() {
+  long min, max;
+  long volume = 0;
+
+  snd_mixer_elem_t* elem = getMixerElem();
 
   snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
-
-  if (action == AUDIO_VOLUME_GET) {
-    snd_mixer_selem_get_playback_volume(elem, SND_MIXER_SCHN_FRONT_LEFT, &volume);
-    *outvol = 100 * volume / max;
-    // std::cout << "Get volume: " << *outvol << std::endl;
-  }
-
-  if (action == AUDIO_VOLUME_SET) {
-    *outvol = (*outvol * (max - min) / (100-1)) + min;
-    // std::cout << "Set volume: " << *outvol << std::endl;
-    snd_mixer_selem_set_playback_volume(elem, SND_MIXER_SCHN_FRONT_LEFT, *outvol);
-    snd_mixer_selem_set_playback_volume(elem, SND_MIXER_SCHN_FRONT_RIGHT, *outvol);
-  }
-
-  int muted = 1;
-  snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_FRONT_LEFT, &muted);
-
-  if (action == AUDIO_MUTE) {
-    snd_mixer_selem_set_playback_switch_all(elem, 0);
-  }
-
-  if (action == AUDIO_UNMUTE) {
-    snd_mixer_selem_set_playback_switch_all(elem, 1);
-  }
-
+  snd_mixer_selem_get_playback_volume(elem, SND_MIXER_SCHN_FRONT_LEFT, &volume);
 
   snd_mixer_close(handle);
 
-  return 0;
+  return volume / (1.f * max);
+}
+
+// volume 0.0 - 1.0
+void setVolumeLevel(float volume) {
+
+  long outvol = volume * 100;
+  long min, max;
+
+  snd_mixer_elem_t* elem = getMixerElem();
+
+  snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
+
+  outvol = outvol * (max - min) / (100-1) + min;
+  snd_mixer_selem_set_playback_volume(elem, SND_MIXER_SCHN_FRONT_LEFT, outvol);
+  snd_mixer_selem_set_playback_volume(elem, SND_MIXER_SCHN_FRONT_RIGHT, outvol);
+
+  snd_mixer_close(handle);
 }
 
 
-void setVolume(float vol) {
+void setMuteState(bool muted) {
+  snd_mixer_elem_t* elem = getMixerElem();
+
+  if (muted) {
+    snd_mixer_selem_set_playback_switch_all(elem, 0);
+  } else {
+    snd_mixer_selem_set_playback_switch_all(elem, 1);
+  }
+  snd_mixer_close(handle);
+}
+
+bool isMuted() {
+  int leftMuted = 0;
+  int rightMuted = 0;
+
+  snd_mixer_elem_t* elem = getMixerElem();
+
+  snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_FRONT_LEFT, &leftMuted);
+  snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_FRONT_RIGHT, &rightMuted);
+
+  snd_mixer_close(handle);
+  return leftMuted + rightMuted == 0;
+}
+
+float setVolume(float vol) {
   float newVolume = vol;
 
 
@@ -76,46 +99,13 @@ void setVolume(float vol) {
     newVolume = 0;
   }
 
-  long outvol = newVolume * 100;
-
-  // std::cout << "Got in value " << vol << std::endl;
-  // std::cout << "Outvolume is set to " << outvol << std::endl;
-  audio(AUDIO_VOLUME_SET, &outvol);
+  setVolumeLevel(newVolume);
+  return getVolume();
 }
 
-float getVolume () {
-  long currentVolume = 0;
-
-  audio(AUDIO_VOLUME_GET, &currentVolume);
-  // std::cout << "Current volume " << currentVolume << std::endl;
-  // std::cout << "Returning volume " << (currentVolume / 100.f) << std::endl;
-
-  return (float) (currentVolume / 100.f);
-}
-
-// bool isMuted() {
-//   BOOL muted = false;
-
-//   IAudioEndpointVolume *endpointVolume = getVolumeCOM();
-
-//   checkErrors(endpointVolume->GetMute(&muted), "getting muted state");
-
-//   return muted;
-// }
-
-bool setMute(bool mute) {
-  long currentVolume = 0;
-  audio(AUDIO_MUTE, &currentVolume);
-  return mute;
-  // if (isMuted() && mute) {
-  //   return mute;
-  // }
-
-  // IAudioEndpointVolume *endpointVolume = getVolumeCOM();
-
-  // checkErrors(endpointVolume->SetMute(mute, NULL), "setting mute");
-
-  // return mute;
+bool setMute(bool muted) {
+  setMuteState(muted);
+  return muted;
 }
 
 NAN_METHOD(GetVolume) {
@@ -129,14 +119,14 @@ NAN_METHOD(SetVolume) {
   // info.GetReturnValue().Set(Nan::New(setVolume(newVolume)));
 }
 
-// NAN_METHOD(IsMuted) {
-//   info.GetReturnValue().Set(Nan::New(isMuted()));
-// }
+NAN_METHOD(IsMuted) {
+  info.GetReturnValue().Set(Nan::New(isMuted()));
+}
 
 NAN_METHOD(SetMute) {
   bool muted = info[0]->BooleanValue();
   setMute(muted);
-  // info.GetReturnValue().Set(Nan::New(setMute(muted)));
+  info.GetReturnValue().Set(Nan::New(isMuted()));
 }
 
 NAN_MODULE_INIT(init) {
@@ -144,8 +134,8 @@ NAN_MODULE_INIT(init) {
                 Nan::New<v8::FunctionTemplate>(GetVolume)->GetFunction());
   target->Set(  Nan::New("setVolume").ToLocalChecked(),
                 Nan::New<v8::FunctionTemplate>(SetVolume)->GetFunction());
-  // target->Set(  Nan::New("isMuted").ToLocalChecked(),
-  //               Nan::New<v8::FunctionTemplate>(IsMuted)->GetFunction());
+  target->Set(  Nan::New("isMuted").ToLocalChecked(),
+                Nan::New<v8::FunctionTemplate>(IsMuted)->GetFunction());
   target->Set(  Nan::New("setMute").ToLocalChecked(),
                 Nan::New<v8::FunctionTemplate>(SetMute)->GetFunction());
 }

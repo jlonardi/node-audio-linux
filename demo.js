@@ -31,8 +31,7 @@ process.stdin.on('keypress', (str, key) => {
       setVolume(getVolume() - 0.02);
       break;
     case 'm': {
-      setMute(true);
-      // setMute(!isMuted());
+      setMute(!isMuted());
       break;
     }
   }
@@ -69,9 +68,9 @@ const drawBar = (current) => {
   if (percentageProgress < 10) {
     emoticon = '\u{1F508}';
   }
-  // if (isMuted()) {
-  //   emoticon = '\u{1F507}';
-  // }
+  if (isMuted()) {
+    emoticon = '\u{1F507}';
+  }
 
   process.stdout.clearLine();
   process.stdout.cursorTo(0);
